@@ -914,11 +914,15 @@ void dt_image_set_flip(const dt_imgid_t imgid, const dt_image_orientation_t orie
      "UPDATE main.images"
      " SET history_end = (SELECT MAX(num) + 1"
      "                    FROM main.history "
-     "                    WHERE imgid = ?1) WHERE id = ?1", -1, &stmt, NULL);
+     "                    WHERE imgid = ?1)"
+     " WHERE id = ?1",
+     -1, &stmt, NULL);
   // clang-format on
   DT_DEBUG_SQLITE3_BIND_INT(stmt, 1, imgid);
   sqlite3_step(stmt);
   sqlite3_finalize(stmt);
+
+  dt_image_cache_set_change_timestamp(darktable.image_cache, imgid);
 
   dt_history_hash_write_from_history(imgid, DT_HISTORY_HASH_CURRENT);
 
@@ -1182,17 +1186,15 @@ static dt_imgid_t _image_duplicate_with_version_ext(const dt_imgid_t imgid,
      "  (id, group_id, film_id, width, height, filename,"
      "   maker_id, model_id, lens_id, exposure,"
      "   aperture, iso, focal_length, focus_distance, datetime_taken, flags,"
-     "   output_width, output_height, crop, raw_parameters, raw_denoise_threshold,"
-     "   raw_auto_bright_threshold, raw_black, raw_maximum,"
-     "   license, sha1sum, orientation, histogram, lightmap,"
-     "   longitude, latitude, altitude, color_matrix, colorspace, version, max_version,"
+     "   output_width, output_height, crop, raw_parameters, raw_black, raw_maximum,"
+     "   orientation, longitude, latitude, altitude, color_matrix,"
+     "   colorspace, version, max_version,"
      "   history_end, position, aspect_ratio, exposure_bias, import_timestamp)"
      " SELECT NULL, group_id, film_id, width, height, filename,"
      "        maker_id, model_id, lens_id,"
      "        exposure, aperture, iso, focal_length, focus_distance, datetime_taken,"
      "        flags, output_width, output_height, crop, raw_parameters,"
-     "        raw_denoise_threshold, raw_auto_bright_threshold, raw_black, raw_maximum,"
-     "        license, sha1sum, orientation, histogram, lightmap,"
+     "        raw_black, raw_maximum, orientation,"
      "        longitude, latitude, altitude, color_matrix, colorspace, NULL, NULL, 0, ?1,"
      "        aspect_ratio, exposure_bias, import_timestamp"
      " FROM main.images WHERE id = ?2",
@@ -1701,9 +1703,9 @@ static uint32_t _image_import_internal(const int32_t film_id,
   // clang-format off
   DT_DEBUG_SQLITE3_PREPARE_V2
     (dt_database_get(darktable.db),
-     "INSERT INTO main.images (id, film_id, filename, license, sha1sum, flags, version, "
+     "INSERT INTO main.images (id, film_id, filename, flags, version, "
      "                         max_version, history_end, position, import_timestamp)"
-     " SELECT NULL, ?1, ?2, '', '', ?3, 0, 0, 0,"
+     " SELECT NULL, ?1, ?2, ?3, 0, 0, 0,"
      "        (IFNULL(MAX(position),0) & 0xFFFFFFFF00000000)  + (1 << 32), ?4"
      " FROM images",
      -1, &stmt, NULL);
@@ -2330,18 +2332,16 @@ dt_imgid_t dt_image_copy_rename(const dt_imgid_t imgid,
          "  (id, group_id, film_id, width, height, filename,"
          "   maker_id, model_id, lens_id, exposure,"
          "   aperture, iso, focal_length, focus_distance, datetime_taken, flags,"
-         "   output_width, output_height, crop, raw_parameters, raw_denoise_threshold,"
-         "   raw_auto_bright_threshold, raw_black, raw_maximum,"
-         "   license, sha1sum, orientation, histogram, lightmap,"
+         "   output_width, output_height, crop, raw_parameters,"
+         "   raw_black, raw_maximum, orientation,"
          "   longitude, latitude, altitude, color_matrix, colorspace, version, max_version,"
          "   position, aspect_ratio, exposure_bias)"
          " SELECT NULL, group_id, ?1 as film_id, width, height, ?2 as filename,"
          "        maker_id, model_id, lens_id,"
          "        exposure, aperture, iso, focal_length, focus_distance, datetime_taken,"
-         "        flags, width, height, crop, raw_parameters, raw_denoise_threshold,"
-         "        raw_auto_bright_threshold, raw_black, raw_maximum,"
-         "        license, sha1sum, orientation, histogram, lightmap,"
-         "        longitude, latitude, altitude, color_matrix, colorspace, -1, -1,"
+         "        flags, width, height, crop, raw_parameters, raw_black, raw_maximum,"
+         "        orientation, longitude, latitude, altitude,"
+         "        color_matrix, colorspace, -1, -1,"
          "        ?3, aspect_ratio, exposure_bias"
          " FROM main.images"
          " WHERE id = ?4",

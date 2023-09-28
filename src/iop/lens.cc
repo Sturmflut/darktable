@@ -4416,7 +4416,7 @@ void gui_init(struct dt_iop_module_t *self)
                    G_CALLBACK(_autoscale_pressed_lf), self);
   gtk_widget_set_tooltip_text(g->scale, _("auto scale"));
   dt_bauhaus_widget_set_quad_tooltip(g->scale,
-    "automatic scale to available image size due to lensfun data");
+    _("automatic scale to available image size due to lensfun data"));
 
   // reverse direction
   g->reverse = dt_bauhaus_combobox_from_params(self, "inverse");
@@ -4485,7 +4485,7 @@ void gui_init(struct dt_iop_module_t *self)
                    G_CALLBACK(_autoscale_pressed_md), self);
   gtk_widget_set_tooltip_text(g->scale_md, _("image scaling"));
   dt_bauhaus_widget_set_quad_tooltip(g->scale_md,
-    "automatic scale to available image size");
+    _("automatic scale to available image size"));
 
   // main widget
   GtkWidget *main_box = self->widget = gtk_box_new(GTK_ORIENTATION_VERTICAL, DT_BAUHAUS_SPACE);
@@ -4495,7 +4495,7 @@ void gui_init(struct dt_iop_module_t *self)
   g->methods_selector = dt_bauhaus_combobox_from_params(self, "method");
   gtk_widget_set_tooltip_text(g->methods_selector, _("select a correction mode either based on\n"
                                                      " a) data and algorithms provided by the lensfun project\n"
-                                                     " b) embedded metadata provided by the camera or software vendor\n"));
+                                                     " b) embedded metadata provided by the camera or software vendor"));
 
   // selector for correction type (modflags): one or more out of
   // distortion, TCA, vignetting
@@ -4540,7 +4540,7 @@ void gui_init(struct dt_iop_module_t *self)
   gtk_widget_set_tooltip_text(g->v_strength,
       _("amount of the applied optical vignetting correction"));
   dt_bauhaus_widget_set_quad_tooltip(g->v_strength,
-    "show applied optical vignette correction mask");
+    _("show applied optical vignette correction mask"));
   dt_bauhaus_slider_set_format(g->v_strength, "%");
   dt_bauhaus_slider_set_digits(g->v_strength, 1);
   dt_bauhaus_widget_set_quad_paint(g->v_strength, dtgtk_cairo_paint_showmask, 0, NULL);

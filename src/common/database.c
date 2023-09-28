@@ -48,7 +48,7 @@
 
 // whenever _create_*_schema() gets changed you HAVE to bump this version and add an update path to
 // _upgrade_*_schema_step()!
-#define CURRENT_DATABASE_VERSION_LIBRARY 40
+#define CURRENT_DATABASE_VERSION_LIBRARY 44
 #define CURRENT_DATABASE_VERSION_DATA    10
 
 // #define USE_NESTED_TRANSACTIONS
@@ -2389,7 +2389,7 @@ static int _upgrade_library_schema_step(dt_database_t *db, int version)
     TRY_EXEC
       ("CREATE VIEW v_images AS"
        " SELECT mi.id AS id, mk.name AS maker, md.name AS model, ln.name AS lens,"
-       "        cm.maker || \" \" || cm.model AS normalized_camera, "
+       "        cm.maker || ' ' || cm.model AS normalized_camera, "
        "        cm.alias AS camera_alias,"
        "        exposure, aperture, iso,"
        "        datetime(datetime_taken/1000000"
@@ -2409,6 +2409,147 @@ static int _upgrade_library_schema_step(dt_database_t *db, int version)
     sqlite3_exec(db->handle, "PRAGMA foreign_keys = ON", NULL, NULL, NULL);
 
     new_version = 40;
+  }
+  else if(version == 40)
+  {
+    TRY_EXEC("ALTER TABLE main.history_hash ADD COLUMN fullthumb_hash BLOB default NULL",
+             "[init] can't add fullthumb_hash column\n");
+    new_version = 41;
+  }
+  else if(version == 41)
+  {
+    sqlite3_exec(db->handle, "PRAGMA foreign_keys = OFF", NULL, NULL, NULL);
+    sqlite3_exec(db->handle, "BEGIN TRANSACTION", NULL, NULL, NULL);
+
+    TRY_EXEC("CREATE TABLE images_new (id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER, "
+             "film_id INTEGER, "
+             "width INTEGER, height INTEGER, filename VARCHAR, "
+             "maker_id INTEGER, model_id INTEGER, lens_id INTEGER, camera_id INTEGER,"
+             "exposure REAL, aperture REAL, iso REAL, focal_length REAL, "
+             "focus_distance REAL, datetime_taken INTEGER, flags INTEGER, "
+             "output_width INTEGER, output_height INTEGER, crop REAL, "
+             "raw_parameters INTEGER, raw_black INTEGER, raw_maximum INTEGER, "
+             "orientation INTEGER, longitude REAL, "
+             "latitude REAL, altitude REAL, color_matrix BLOB, colorspace INTEGER, version INTEGER, "
+             "max_version INTEGER, write_timestamp INTEGER, history_end INTEGER, position INTEGER, "
+             "aspect_ratio REAL, exposure_bias REAL, "
+             "import_timestamp INTEGER DEFAULT -1, change_timestamp INTEGER DEFAULT -1, "
+             "export_timestamp INTEGER DEFAULT -1, print_timestamp INTEGER DEFAULT -1, "
+             "FOREIGN KEY(maker_id) REFERENCES makers(id) ON DELETE CASCADE ON UPDATE CASCADE, "
+             "FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE CASCADE ON UPDATE CASCADE, "
+             "FOREIGN KEY(lens_id) REFERENCES lens(id) ON DELETE CASCADE ON UPDATE CASCADE, "
+             "FOREIGN KEY(camera_id) REFERENCES cameras(id) ON DELETE CASCADE ON UPDATE CASCADE, "
+             "FOREIGN KEY(film_id) REFERENCES film_rolls(id) ON DELETE CASCADE ON UPDATE CASCADE, "
+             "FOREIGN KEY(group_id) REFERENCES images(id) ON DELETE RESTRICT ON UPDATE CASCADE)",
+             "[init] can't create new table images");
+
+    TRY_EXEC("INSERT INTO images_new"
+             " SELECT id, group_id, film_id, width, height, filename,"
+             "        maker_id, model_id, lens_id, camera_id,"
+             "        exposure, aperture, iso, focal_length,"
+             "        focus_distance, datetime_taken, flags,"
+             "        output_width, output_height, crop,"
+             "        raw_parameters, raw_black, raw_maximum,"
+             "        orientation, longitude,"
+             "        latitude, altitude, color_matrix, colorspace, version,"
+             "        max_version, write_timestamp, history_end, position,"
+             "        aspect_ratio, exposure_bias,"
+             "        import_timestamp, change_timestamp, export_timestamp, print_timestamp"
+             "  FROM images",
+             "[init] can't populate new images table\n");
+
+    // NOTE: datetime_taken is in nano-second since "0001-01-01 00:00:00"
+    TRY_EXEC("DROP VIEW v_images",
+             "[init] can't drop v_images view\n");
+
+    TRY_EXEC("DROP TABLE images",
+             "[init] can't drop table images_old\n");
+
+    TRY_EXEC("ALTER TABLE images_new RENAME TO images",
+             "[init] can't rename images\n");
+
+    TRY_EXEC
+      ("CREATE VIEW v_images AS"
+       " SELECT mi.id AS id, mk.name AS maker, md.name AS model, ln.name AS lens,"
+       "        cm.maker || ' ' || cm.model AS normalized_camera, "
+       "        cm.alias AS camera_alias,"
+       "        exposure, aperture, iso,"
+       "        datetime(datetime_taken/1000000"
+       "                 + unixepoch('0001-01-01 00:00:00'), 'unixepoch') AS datetime,"
+       "        fr.folder AS folders, filename"
+       " FROM images AS mi,"
+       "      makers AS mk, models AS md, lens AS ln, cameras AS cm, film_rolls AS fr"
+       " WHERE mi.maker_id = mk.id"
+       "   AND mi.model_id = md.id"
+       "   AND mi.lens_id = ln.id"
+       "   AND mi.camera_id = cm.id"
+       "   AND mi.film_id = fr.id"
+       " ORDER BY normalized_camera, folders",
+       "[init] can't create view v_images\n");
+
+    sqlite3_exec(db->handle, "COMMIT", NULL, NULL, NULL);
+    sqlite3_exec(db->handle, "PRAGMA foreign_keys = ON", NULL, NULL, NULL);
+
+    new_version = 42;
+  }
+  else if(version == 42)
+  {
+    TRY_EXEC("ALTER TABLE main.history_hash ADD COLUMN fullthumb_maxmip INTEGER default 0",
+             "[init] can't add fullthumb_maxmip column\n");
+    new_version = 43;
+  }
+  else if(version == 43)
+  {
+    // add back triggers and indices removed during last images changes.
+
+    // recreate the indexes
+    TRY_EXEC("CREATE INDEX image_position_index ON images (position)",
+             "[init] can't add image_position_index\n");
+    TRY_EXEC("CREATE INDEX images_filename_index ON images (filename, version)",
+             "[init] can't recreate images_filename_index\n");
+    TRY_EXEC("CREATE INDEX images_film_id_index ON images (film_id, filename)",
+             "[init] can't recreate images_film_id_index\n");
+    TRY_EXEC("CREATE INDEX images_group_id_index ON images (group_id, id)",
+             "[init] can't recreate images_group_id_index\n");
+    TRY_EXEC("CREATE INDEX images_latlong_index ON images (latitude DESC, longitude DESC)",
+             "[init] can't add images_latlong_index\n");
+    TRY_EXEC("CREATE INDEX images_datetime_taken ON images (datetime_taken)",
+             "[init] can't create images_datetime_taken\n");
+
+    // Some triggers to remove possible dangling refs in makers/models/lens/cameras
+    TRY_EXEC("CREATE TRIGGER remove_makers AFTER DELETE ON images"
+             " BEGIN"
+             "  DELETE FROM makers"
+             "    WHERE id = OLD.maker_id"
+             "      AND NOT EXISTS (SELECT 1 FROM images WHERE maker_id = OLD.maker_id);"
+             " END",
+             "[init] can't create trigger remove_makers\n");
+
+    TRY_EXEC("CREATE TRIGGER remove_models AFTER DELETE ON images"
+             " BEGIN"
+             "  DELETE FROM models"
+             "    WHERE id = OLD.model_id"
+             "      AND NOT EXISTS (SELECT 1 FROM images WHERE model_id = OLD.model_id);"
+             " END",
+             "[init] can't create trigger remove_models\n");
+
+    TRY_EXEC("CREATE TRIGGER remove_lens AFTER DELETE ON images"
+             " BEGIN"
+             "  DELETE FROM lens"
+             "    WHERE id = OLD.lens_id"
+             "      AND NOT EXISTS (SELECT 1 FROM images WHERE lens_id = OLD.lens_id);"
+             " END",
+             "[init] can't create trigger remove_lens\n");
+
+    TRY_EXEC("CREATE TRIGGER remove_cameras AFTER DELETE ON images"
+             " BEGIN"
+             "  DELETE FROM cameras"
+             "    WHERE id = OLD.camera_id"
+             "      AND NOT EXISTS (SELECT 1 FROM images WHERE camera_id = OLD.camera_id);"
+             " END",
+             "[init] can't create trigger remove_cameras\n");
+
+    new_version = 44;
   }
   else
     new_version = version; // should be the fallback so that calling code sees that we are in an infinite loop
@@ -2769,10 +2910,8 @@ static void _create_library_schema(dt_database_t *db)
       "  exposure REAL, aperture REAL, iso REAL, focal_length REAL,"
       "  focus_distance REAL, datetime_taken INTEGER, flags INTEGER,"
       "  output_width INTEGER, output_height INTEGER, crop REAL,"
-      "  raw_parameters INTEGER, raw_denoise_threshold REAL,"
-      "  raw_auto_bright_threshold REAL, raw_black INTEGER, raw_maximum INTEGER,"
-      "  license VARCHAR, sha1sum CHAR(40),"
-      "  orientation INTEGER, histogram BLOB, lightmap BLOB, longitude REAL,"
+      "  raw_parameters INTEGER, raw_black INTEGER, raw_maximum INTEGER,"
+      "  orientation INTEGER, longitude REAL,"
       "  latitude REAL, altitude REAL, color_matrix BLOB, colorspace INTEGER,"
       "  version INTEGER, max_version INTEGER, write_timestamp INTEGER,"
       "  history_end INTEGER, position INTEGER, aspect_ratio REAL, exposure_bias REAL,"
@@ -2846,10 +2985,13 @@ static void _create_library_schema(dt_database_t *db)
   sqlite3_exec(db->handle, "CREATE INDEX main.metadata_index_key ON meta_data (key)", NULL, NULL, NULL);
   sqlite3_exec(db->handle, "CREATE TABLE main.module_order (imgid INTEGER PRIMARY KEY, version INTEGER, iop_list VARCHAR)",
                NULL, NULL, NULL);
-  sqlite3_exec(db->handle, "CREATE TABLE main.history_hash (imgid INTEGER PRIMARY KEY, "
-               "basic_hash BLOB, auto_hash BLOB, current_hash BLOB, mipmap_hash BLOB, "
-               "FOREIGN KEY(imgid) REFERENCES images(id) ON UPDATE CASCADE ON DELETE CASCADE)",
-               NULL, NULL, NULL);
+  sqlite3_exec
+    (db->handle, "CREATE TABLE main.history_hash"
+     " (imgid INTEGER PRIMARY KEY,"
+     "  basic_hash BLOB, auto_hash BLOB, current_hash BLOB,"
+     "  mipmap_hash BLOB, fullthumb_hash BLOB, fullthumb_maxmip INTEGER,"
+     "  FOREIGN KEY(imgid) REFERENCES images(id) ON UPDATE CASCADE ON DELETE CASCADE)",
+     NULL, NULL, NULL);
 
   // v34
   sqlite3_exec(db->handle, "CREATE INDEX main.images_datetime_taken_nc ON images (datetime_taken COLLATE NOCASE)",

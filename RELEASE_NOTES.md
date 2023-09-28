@@ -67,6 +67,8 @@ changes (where available).
   previous high quality preview that is still visible is moved or
   resized and only the edges are temporarily shown in low quality.
 
+- Improve by 25% the display of the pictures on the map.
+
 ## Other Changes
 
 - Hotpixels module now also supports monochrome images.
@@ -158,6 +160,14 @@ changes (where available).
 
 - AVIF export changes: no conversion to YUV for lossless, update
   quantizer selection logic and make lossy default.
+
+- The generation of the preference dialog now takes the specification
+  of tabs and sections from darktable.xml.in too, so almost the
+  complete layout can be changed by just editing that file.
+
+- Changed the preference dialog dropdowns to use bauhaus widgets so it
+  conforms to (and offers the same behavior) as widgets in the rest of
+  the program.
 
 ## Bug Fixes
 
