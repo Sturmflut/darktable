@@ -56,6 +56,7 @@ typedef struct dt_lib_select_t
   GtkWidget *select_invert_button;
   GtkWidget *select_film_roll_button;
   GtkWidget *select_untouched_button;
+  GtkWidget *select_modified_since_export_button;
 } dt_lib_select_t;
 
 void gui_update(dt_lib_module_t *self)
@@ -72,6 +73,7 @@ void gui_update(dt_lib_module_t *self)
 
   //theoretically can count if there are unaltered in collection but no need to waste CPU cycles on that.
   gtk_widget_set_sensitive(GTK_WIDGET(d->select_untouched_button), collection_cnt > 0);
+  gtk_widget_set_sensitive(GTK_WIDGET(d->select_modified_since_export_button), collection_cnt > 0);
 
   gtk_widget_set_sensitive(GTK_WIDGET(d->select_film_roll_button), selected_cnt > 0);
 }
@@ -109,6 +111,9 @@ static void button_clicked(GtkWidget *widget, gpointer user_data)
       break;
     case 4: // untouched
       dt_selection_select_unaltered(darktable.selection);
+      break;
+    case 5: // modified since last export
+      dt_selection_select_modified_since_export(darktable.selection);
       break;
     default: // case 3: same film roll
       dt_selection_select_filmroll(darktable.selection);
@@ -150,7 +155,12 @@ void gui_init(dt_lib_module_t *self)
 
   d->select_untouched_button = dt_action_button_new(self, N_("select untouched"), button_clicked, GINT_TO_POINTER(4),
                                               _("select untouched images in\ncurrent collection"), 0, 0);
-  gtk_grid_attach(grid, d->select_untouched_button, 0, line, 2, 1);
+  gtk_grid_attach(grid, d->select_untouched_button, 0, line++, 2, 1);
+
+  d->select_modified_since_export_button = dt_action_button_new(self, N_("select modified since export"), button_clicked, GINT_TO_POINTER(5),
+                                              _("select images that have been\nmodified since their last export"), 0, 0);
+
+  gtk_grid_attach(grid, d->select_modified_since_export_button, 0, line, 2, 1);
 
   gtk_label_set_ellipsize(GTK_LABEL(gtk_bin_get_child(GTK_BIN(d->select_all_button))), PANGO_ELLIPSIZE_START);
   gtk_label_set_ellipsize(GTK_LABEL(gtk_bin_get_child(GTK_BIN(d->select_none_button))), PANGO_ELLIPSIZE_START);

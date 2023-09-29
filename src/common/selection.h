@@ -46,6 +46,8 @@ void dt_selection_select_all(struct dt_selection_t *selection);
 void dt_selection_select_filmroll(struct dt_selection_t *selection);
 /** selects all unaltered images in the current collection */
 void dt_selection_select_unaltered(struct dt_selection_t *selection);
+/** selects all images that have been modified since their last export in the current collection */
+void dt_selection_select_modified_since_export(struct dt_selection_t *selection);
 /** selects a set of images from a list. the list is unaltered */
 void dt_selection_select_list(struct dt_selection_t *selection, GList *list);
 /** selects a set of images from a list. the list is unaltered */

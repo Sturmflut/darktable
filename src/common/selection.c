@@ -427,6 +427,7 @@ void dt_selection_select_filmroll(dt_selection_t *selection)
   dt_collection_hint_message(darktable.collection);
 }
 
+
 void dt_selection_select_unaltered(dt_selection_t *selection)
 {
   if(!selection->collection) return;
@@ -444,6 +445,33 @@ void dt_selection_select_unaltered(dt_selection_t *selection)
      "  WHERE ci.imgid = h.imgid"
      "    AND (h.current_hash = h.auto_hash"
      "         OR h.current_hash IS NULL)",
+     NULL, NULL, NULL);
+
+  selection->last_single_id = NO_IMGID;
+  _selection_raise_signal();
+
+  /* update hint message */
+  dt_collection_hint_message(darktable.collection);
+}
+
+
+void dt_selection_select_modified_since_export(dt_selection_t *selection)
+{
+  if(!selection->collection) return;
+
+  /* clean current selection and select images that have been */
+  /* modified since last export*/
+  DT_DEBUG_SQLITE3_EXEC(dt_database_get(darktable.db),
+                        "DELETE FROM main.selected_images", NULL, NULL, NULL);
+
+  DT_DEBUG_SQLITE3_EXEC
+    (dt_database_get(darktable.db),
+     "INSERT OR IGNORE"
+     " INTO main.selected_images"
+     " SELECT i.id"
+     "  FROM memory.collected_images as ci, main.images as i"
+     "  WHERE ci.imgid = i.id"
+     "    AND (i.change_timestamp > i.export_timestamp)",
      NULL, NULL, NULL);
 
   selection->last_single_id = NO_IMGID;
